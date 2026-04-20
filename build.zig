@@ -19,7 +19,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
-    lib.addCSourceFiles(.{
+    lib.root_module.addCSourceFiles(.{
         .root = upstream.path("."),
         .files = &[_][]const u8{
             "snappy-sinksource.cc",
@@ -44,12 +44,12 @@ pub fn build(b: *std.Build) void {
         .PROJECT_VERSION_PATCH = @as(i64, @intCast(snappy_version.patch)),
     });
 
-    lib.addIncludePath(upstream.path("."));
-    lib.addConfigHeader(snappy_stubs_public_h);
+    lib.root_module.addIncludePath(upstream.path("."));
+    lib.root_module.addConfigHeader(snappy_stubs_public_h);
 
     lib.installHeader(upstream.path("snappy.h"), "snappy.h");
     lib.installHeader(upstream.path("snappy-c.h"), "snappy-c.h");
-    lib.installHeader(snappy_stubs_public_h.getOutput(), "snappy-stubs-public.h");
+    lib.installHeader(snappy_stubs_public_h.getOutputFile(), "snappy-stubs-public.h");
     b.installArtifact(lib);
 
     const module = b.addModule("snappy", .{

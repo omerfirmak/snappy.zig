@@ -13,18 +13,16 @@ test {
 
 test "round trip - raw" {
     const allocator = std.testing.allocator;
+    const io = std.testing.io;
 
-    var dir = try std.fs.cwd().openDir("testdata", .{ .iterate = true });
-    defer dir.close();
+    var dir = try std.Io.Dir.cwd().openDir(io, "testdata", .{ .iterate = true });
+    defer dir.close(io);
 
     var it = dir.iterate();
-    while (try it.next()) |entry| {
+    while (try it.next(io)) |entry| {
         if (entry.kind != .file) continue;
 
-        var file = try dir.openFile(entry.name, .{});
-        defer file.close();
-
-        const bytes = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
+        const bytes = try dir.readFileAlloc(io, entry.name, allocator, .unlimited);
         defer allocator.free(bytes);
 
         const compressed = try allocator.alloc(u8, raw.maxCompressedLength(bytes.len));
@@ -41,19 +39,17 @@ test "round trip - raw" {
 
 test "bad data" {
     const allocator = std.testing.allocator;
+    const io = std.testing.io;
 
-    var dir = try std.fs.cwd().openDir("testdata", .{ .iterate = true });
-    defer dir.close();
+    var dir = try std.Io.Dir.cwd().openDir(io, "testdata", .{ .iterate = true });
+    defer dir.close(io);
 
     var it = dir.iterate();
-    while (try it.next()) |entry| {
+    while (try it.next(io)) |entry| {
         if (entry.kind != .file) continue;
         if (!std.mem.startsWith(u8, entry.name, "baddata")) continue;
 
-        var file = try dir.openFile(entry.name, .{});
-        defer file.close();
-
-        const bytes = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
+        const bytes = try dir.readFileAlloc(io, entry.name, allocator, .unlimited);
         defer allocator.free(bytes);
         const got = try allocator.alloc(u8, try raw.uncompressedLength(bytes));
         defer allocator.free(got);
@@ -63,18 +59,16 @@ test "bad data" {
 
 test "round trip - framed" {
     const allocator = std.testing.allocator;
+    const io = std.testing.io;
 
-    var dir = try std.fs.cwd().openDir("testdata", .{ .iterate = true });
-    defer dir.close();
+    var dir = try std.Io.Dir.cwd().openDir(io, "testdata", .{ .iterate = true });
+    defer dir.close(io);
 
     var it = dir.iterate();
-    while (try it.next()) |entry| {
+    while (try it.next(io)) |entry| {
         if (entry.kind != .file) continue;
 
-        var file = try dir.openFile(entry.name, .{});
-        defer file.close();
-
-        const bytes = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
+        const bytes = try dir.readFileAlloc(io, entry.name, allocator, .unlimited);
         defer allocator.free(bytes);
         const d = bytes[0..];
         const compressed = try frame.compress(allocator, d[0..]);

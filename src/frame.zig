@@ -36,9 +36,9 @@ pub const CompressError = std.mem.Allocator.Error || snappy.Error;
 ///
 /// Caller owns the returned memory.
 pub fn compress(allocator: std.mem.Allocator, bytes: []const u8) CompressError![]u8 {
-    var out = std.ArrayList(u8).init(allocator);
-    errdefer out.deinit();
-    try out.appendSlice(&IDENTIFIER_FRAME);
+    var out = std.ArrayList(u8).empty;
+    errdefer out.deinit(allocator);
+    try out.appendSlice(allocator, &IDENTIFIER_FRAME);
 
     const max_compressed_len = snappy.maxCompressedLength(UNCOMPRESSED_CHUNK_SIZE_LIMIT);
     var compressed_buf = try allocator.alloc(u8, max_compressed_len);
@@ -59,15 +59,15 @@ pub fn compress(allocator: std.mem.Allocator, bytes: []const u8) CompressError![
 
         var header: [4]u8 = .{ @intFromEnum(chunk_type), 0, 0, 0 };
         std.mem.writeInt(u24, header[1..4], @intCast(frame_size), .little);
-        try out.appendSlice(&header);
+        try out.appendSlice(allocator, &header);
 
         var checksum: [4]u8 = undefined;
         std.mem.writeInt(u32, &checksum, crc(chunk), .little);
-        try out.appendSlice(&checksum);
-        try out.appendSlice(payload);
+        try out.appendSlice(allocator, &checksum);
+        try out.appendSlice(allocator, payload);
     }
 
-    return out.toOwnedSlice();
+    return out.toOwnedSlice(allocator);
 }
 
 /// Parse framed Snappy data and return the uncompressed payload,
@@ -83,8 +83,8 @@ pub fn uncompress(allocator: std.mem.Allocator, bytes: []const u8) UncompressErr
 
     var slice = bytes[IDENTIFIER_FRAME.len..];
 
-    var out = std.ArrayList(u8).init(allocator);
-    errdefer out.deinit();
+    var out = std.ArrayList(u8).empty;
+    errdefer out.deinit(allocator);
 
     while (slice.len > 0) {
         if (slice.len < 4) break;
@@ -102,7 +102,7 @@ pub fn uncompress(allocator: std.mem.Allocator, bytes: []const u8) UncompressErr
                 const uncompressed_len = try snappy.uncompress(compressed, uncompressed[0..]);
 
                 if (crc(uncompressed[0..uncompressed_len]) != std.mem.bytesToValue(u32, checksum)) return UncompressError.BadChecksum;
-                try out.appendSlice(uncompressed[0..uncompressed_len]);
+                try out.appendSlice(allocator, uncompressed[0..uncompressed_len]);
             },
             .uncompressed => {
                 const checksum = frame[0..4];
@@ -112,7 +112,7 @@ pub fn uncompress(allocator: std.mem.Allocator, bytes: []const u8) UncompressErr
                     return UncompressError.IllegalChunkLength;
                 }
                 if (crc(uncompressed) != std.mem.bytesToValue(u32, checksum)) return UncompressError.BadChecksum;
-                try out.appendSlice(uncompressed);
+                try out.appendSlice(allocator, uncompressed);
             },
             .padding,
             .skippable,
@@ -126,7 +126,7 @@ pub fn uncompress(allocator: std.mem.Allocator, bytes: []const u8) UncompressErr
 
     if (out.items.len == 0) return null;
 
-    return try out.toOwnedSlice();
+    return try out.toOwnedSlice(allocator);
 }
 
 /// Masked CRC32C hash used by the Snappy framing format.
